@@ -1,58 +1,57 @@
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { User } from '../Models/User';
+import { Observable, catchError, first, map, throwError } from 'rxjs';
+import { ContaPJ } from '../Models/ContaPJ';
+import { Router } from '@angular/router';
 
 @Injectable({
   providedIn: 'root'
 })
 export class UserService {
-  private localStorageUser = 'userData';
-  private localStorageCurrentUser = 'currentUser';
 
-  constructor() { }
+  private apiUrl = 'http://localhost:5287/v1/customer';
+  private accUrl = 'http://localhost:5287/v1/account/customer';
 
-  // Método para registrar um novo usuário
-  registerUser(user: User): void {
-    // Adicione uma verificação para evitar adicionar usuários com campos obrigatórios vazios
-    if (user && user.fullName && user.cpf && user.phone && user.address && user.password) {
-      const existingUsers = this.getUsers();
-      existingUsers.push(user);
-      this.saveUsers(existingUsers);
+  constructor(private httpRequest: HttpClient, private router: Router) { }
+
+  register(registerData: ContaPJ | undefined): Observable<any> {
+    const registerUrl = `${this.apiUrl}/registracontapj`;
+    return this.httpRequest.post<any>(registerUrl, registerData).pipe(first());
+  }
+
+  login(email: string, password: string): Observable<any> {
+    const loginData = { email, password };
+    const loginUrl = `${this.apiUrl}/login`;
+    return this.httpRequest.post<any>(loginUrl, loginData).pipe(first());
+  }
+
+
+  getUser(): Observable<any> {
+    const currentUserString = localStorage.getItem('currentUser');
+    let currentUser;
+
+    if (currentUserString) {
+      currentUser = JSON.parse(currentUserString);
     } else {
-      alert('Tentativa de registrar usuário inválido. Campos obrigatórios ausentes.');
+      alert('Nenhum usuário logado.');
+      this.router.navigate(['/login']);
     }
+    console.log("Usuário localstorage = " + JSON.stringify(currentUser));
+    const token = currentUser.token;
+    const headers = new HttpHeaders({
+      'Authorization': `Bearer ${token}`
+    });
+
+    return this.httpRequest.get<any>(this.accUrl, { headers })
+      .pipe(
+        map(customer => customer),
+        catchError(() => throwError(() => new Error('Ops! Algo deu errado. Tente novamente mais tarde.')))
+      );
+
   }
 
-  // Método para obter todos os usuários armazenados
-  login(cpf:string, password:string): boolean{
-    const users = this.getUsers();
-    const user = users.find(u => u.cpf === cpf && u.password === password);
 
-    if(user){
-      localStorage.setItem(this.localStorageUser, JSON.stringify(user));
-      alert('Login bem-sucedido');
-      return true;
-    }else{
-      alert('Falha no login. Usuário não encontrado ou senha incorreta.');
-      return false;
-    }
-  }
 
-  private getUsers(): User[] {
-    const userData = localStorage.getItem(this.localStorageUser);
-    return userData ? JSON.parse(userData) : [];
-  }
-
-  // Método para salvar os usuários no localStorage
-  private saveUsers(users: User[]): void {
-    localStorage.setItem(this.localStorageUser, JSON.stringify(users));
-  }
-
-  getCurrentUser(): User | null {
-    const currentUserData = localStorage.getItem(this.localStorageCurrentUser);
-    return currentUserData ? JSON.parse(currentUserData) : null;
-  }
-
-  logout(): void {
-    localStorage.removeItem(this.localStorageCurrentUser);
-  }  
 }
+
+
